@@ -15,6 +15,7 @@
 """Test that pymongo is fork safe."""
 
 import os
+import threading
 from multiprocessing import Pipe
 from test import IntegrationTest, client_context
 from test.utils import ExceptionCatchingThread, rs_or_single_client
@@ -107,6 +108,9 @@ class TestFork(IntegrationTest):
                 self.runner = runner
                 super().__init__()
 
+            def print(self, msg):
+                print(f"{os.getpid()}-{self.ident}: {msg}")
+
             def run(self) -> None:
                 clients = []
                 for _ in range(10):
@@ -137,6 +141,7 @@ class TestFork(IntegrationTest):
 
                 for c in clients:
                     c.close()
+                self.print("Done")
 
         threads = [ForkThread(self) for _ in range(10)]
         for t in threads:
@@ -144,3 +149,16 @@ class TestFork(IntegrationTest):
 
         for t in threads:
             t.join()
+
+
+def print_state(state):
+    print(f"=== {state}: {os.getpid()} ===")
+    for x in threading.enumerate():
+        print(x)
+
+
+os.register_at_fork(
+    before=lambda: print_state("pre-fork"),
+    after_in_parent=lambda: print_state("parent"),
+    after_in_child=lambda: print_state("parent"),
+)
